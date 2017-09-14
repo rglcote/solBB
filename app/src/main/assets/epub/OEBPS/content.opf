@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='utf-8'?>
+<package xmlns="http://www.idpf.org/2007/opf"
+         xmlns:dc="http://purl.org/dc/elements/1.1/"
+         unique-identifier="bookid" version="2.0">
+    <metadata>
+        <dc:title>Title</dc:title>
+        <dc:creator>Author</dc:creator>
+        <dc:identifier
+                id="bookid">urn:uuid:URL
+        </dc:identifier>
+        <dc:language>en-US</dc:language>
+        <dc:rights>http://creativecommons.org/licenses/by-nd-nc/1.0/</dc:rights>
+        <meta name="cover" content="cover-image"/>
+    </metadata>
+    <manifest>
+        <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+        <item id="cover" href="title.html" media-type="application/xhtml+xml"/>
+        <item id="content" href="content.html"
+              media-type="application/xhtml+xml"/>
+        <item id="cover-image" href="images/cover.jpg" media-type="image/jpeg"/>
+        <item id="css" href="stylesheet.css" media-type="text/css"/>
+    </manifest>
+    <spine toc="ncx">
+        <!--<itemref idref="cover" linear="no"/>-->
+        <itemref idref="cover"/>
+        <itemref idref="content"/>
+    </spine>
+    <guide>
+        <reference href="title.html" type="cover" title="Cover"/>
+    </guide>
+</package>
