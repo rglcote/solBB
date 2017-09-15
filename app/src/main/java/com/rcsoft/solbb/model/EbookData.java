@@ -14,6 +14,7 @@ public class EbookData {
     String author;
     String title;
     String filePath;
+    Uri coverImage;
 
     public ArrayList<ChapterEntry> getChapters() {
         return chapters;
@@ -45,5 +46,13 @@ public class EbookData {
 
     public void setFilePath(String filePath) {
         this.filePath = filePath;
+    }
+
+    public Uri getCoverImage() {
+        return coverImage;
+    }
+
+    public void setCoverImage(Uri coverImage) {
+        this.coverImage = coverImage;
     }
 }

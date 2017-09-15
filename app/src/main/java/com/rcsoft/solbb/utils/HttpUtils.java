@@ -1,4 +1,4 @@
-package com.rcsoft.solbb.net;
+package com.rcsoft.solbb.utils;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -8,7 +8,7 @@ import java.util.Map;
  * Created by RDCoteRi on 2017-09-13.
  */
 
-public class NetUtils {
+public class HttpUtils {
 
     private static final char PARAMETER_DELIMITER = '&';
     private static final char PARAMETER_EQUALS_CHAR = '=';

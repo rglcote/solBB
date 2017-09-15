@@ -15,31 +15,28 @@ import com.adobe.dp.epub.opf.StyleResource;
 import com.adobe.dp.epub.ops.OPSDocument;
 import com.adobe.dp.epub.ops.SVGElement;
 import com.adobe.dp.epub.ops.SVGImageElement;
-import com.rcsoft.solbb.html.HTMLSanitiser;
-import com.rcsoft.solbb.net.SOLNetworkDAO;
 
-import net.htmlparser.jericho.Attributes;
-import net.htmlparser.jericho.Element;
-import net.htmlparser.jericho.HTMLElementName;
 import net.htmlparser.jericho.MasonTagTypes;
 import net.htmlparser.jericho.MicrosoftTagTypes;
-import net.htmlparser.jericho.OutputDocument;
 import net.htmlparser.jericho.PHPTagTypes;
-import net.htmlparser.jericho.Source;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.PrintWriter;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Created by RDCoteRi on 2017-09-14.
  */
+
+//todo cleancup
+        /*
+getExternalStorage() + "/Android/data/<package_name>/cache/"
+replacing by your app packaged, e.g. com. Orabig.myFirstApp that special folder is automatically deleted from the system if the user uninstall the application, keeping the system free from temporary files.
+edit:Please note that my manifest does not include theyou have to!
+edit: also, if you creating temporary media files (PNG for example) is good practice to create an empty file named .nomedia on that folder. That way you avoid the Media Scanner scanning it and showing it on the gallery.
+last edit:and before creating files you must create the folder by calling mkdirs() on the File object.
+         */
 
 public class EpubBuilder {
 
@@ -162,90 +159,5 @@ public class EpubBuilder {
         toc.getRootTOCEntry().add(tocEntry);
 
     }
-
-
-    private void writeSegment(PrintWriter out, Source source, Element element, int ndx) throws IOException {
-
-        OutputDocument outputDocument = new OutputDocument(element);
-
-        //remove any intra-story links
-        Element h3End = source.getFirstElement("class", "end", true);
-        if (h3End != null) {
-            outputDocument.remove(h3End);
-        }
-
-        List<Element> conTags = source.getAllElements("class", "conTag", true);
-        if (conTags != null) {
-            outputDocument.remove(conTags);
-        }
-
-        List<Element> pager = source.getAllElements("class", "pager", true);
-        if (pager != null) {
-            outputDocument.remove(pager);
-        }
-
-        //remove any commends
-        Element endNote = source.getFirstElement("class", "end-note", true);
-        if (endNote != null) {
-            outputDocument.remove(endNote);
-        }
-
-        //remove voting form
-        Element form = source.getElementById("vote-form");
-        if (form != null) {
-            outputDocument.remove(form);
-        }
-
-        //remove any end comments
-        List<Element> cComments = source.getAllElements("class", "c", true);
-        if (cComments != null) {
-            outputDocument.remove(cComments);
-        }
-
-        //update div id if there are multiple subpages
-        if (pager != null && !pager.isEmpty()) {
-            Attributes divAttributes = element.getAttributes();
-            Map<String, String> attributesMap = new HashMap<String, String>();
-            attributesMap.put("id", "story" + ndx);
-            outputDocument.replace(divAttributes, attributesMap);
-        }
-
-        out.println(HTMLSanitiser.stripInvalidMarkup(outputDocument.toString()));
-
-        if (pager != null && !pager.isEmpty()) {
-            writeSubSegment(pager.iterator().next(), out, ndx);
-        }
-
-    }
-
-    private void writeSubSegment(Element pager, PrintWriter out, int ndx) throws IOException {
-
-        try {
-
-            List<Element> links = pager.getAllElements(HTMLElementName.A);
-            for (Element link : links) {
-                if (link.getContent().getTextExtractor().toString().trim().equals("Next")) {
-
-                    String content = SOLNetworkDAO.getInstance().downloadStorySubChapters(SOLNetworkDAO.BASE_URL + link.getAttributeValue("href"), ndx);
-
-                    Source source = new Source(content);
-                    // Call fullSequentialParse manually as most of the source will be parsed.
-                    source.fullSequentialParse();
-
-                    //<div id="story">
-                    Element div = source.getElementById("story");
-                    writeSegment(out, source, div, ndx++);
-
-                } else {
-                    Log.e("SOL", "Error downloading chapter");
-                }
-            }
-
-        } catch (IOException e) {
-            Log.e("SOL", "Error downloading chapter", e);
-        }
-
-    }
-
 
 }

@@ -14,6 +14,7 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.rcsoft.solbb.model.EbookData;
 import com.rcsoft.solbb.net.SOLNetworkDAO;
 
 import java.io.IOException;
@@ -43,12 +44,9 @@ public class BookBuildActivity extends AppCompatActivity {
         } else {
             //start process
             SOLNetworkDAO.getInstance().setProgressView((TextView) findViewById(R.id.progress_text_view));
-            SOLNetworkDAO.getInstance().buildEbookFromStoryId(mStoryIdView.getText().toString(), selectedImageURI);
-
+            EbookData data = SOLNetworkDAO.getInstance().buildEbookFromStoryId(mStoryIdView.getText().toString(), selectedImageURI);
         }
-
     }
-
 
     public void selectImage(View v) {
         Intent intent = new Intent();

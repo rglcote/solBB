@@ -6,18 +6,19 @@ import android.widget.TextView;
 
 import com.rcsoft.solbb.model.ChapterEntry;
 import com.rcsoft.solbb.model.EbookData;
+import com.rcsoft.solbb.utils.HTMLSanitiser;
+import com.rcsoft.solbb.utils.HttpUtils;
 
+import net.htmlparser.jericho.Attributes;
 import net.htmlparser.jericho.Element;
 import net.htmlparser.jericho.HTMLElementName;
+import net.htmlparser.jericho.OutputDocument;
 import net.htmlparser.jericho.Source;
 
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpStatus;
-import org.apache.http.client.methods.HttpGet;
-
-import java.io.File;
-import java.io.FileWriter;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.CookieHandler;
 import java.net.CookieManager;
@@ -25,6 +26,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created with IntelliJ IDEA.
@@ -53,125 +55,81 @@ public class SOLNetworkDAO {
         return instance;
     }
 
+    public void setProgressView(TextView progressView) {
+        this.progressView = progressView;
+    }
+
+    private void publishProgress(String message) {
+        progressView.append(message + '\n');
+    }
+
     public EbookData buildEbookFromStoryId(String storyId, Uri coverImage) {
 
         EbookData ebookData = new EbookData();
-
-        parseChapters(storyId, ebookData);
-        publishProgress("TOC parsed");
-        downloadChapters(ebookData);
-        return ebookData;
-
-        //todo cleancup
-        /*
-getExternalStorage() + "/Android/data/<package_name>/cache/"
-replacing by your app packaged, e.g. com. Orabig.myFirstApp that special folder is automatically deleted from the system if the user uninstall the application, keeping the system free from temporary files.
-edit:Please note that my manifest does not include theyou have to!
-edit: also, if you creating temporary media files (PNG for example) is good practice to create an empty file named .nomedia on that folder. That way you avoid the Media Scanner scanning it and showing it on the gallery.
-last edit:and before creating files you must create the folder by calling mkdirs() on the File object.
-         */
+        ebookData.setCoverImage(coverImage);
+        try {
+            parseStoryTOC(storyId, ebookData);
+            publishProgress("TOC parsed");
+            downloadChapters(ebookData);
+            return ebookData;
+        } catch (IOException e) {
+            throw new RuntimeException("Error downloading SOL data", e);
+        }
 
     }
 
+    public void parseStoryTOC(String storyId, EbookData ebookData) throws IOException {
 
-    public void parseChapters(String storyId, EbookData ebookData) {
+        URL url = new URL(STORY_URL + storyId);
+        Source source = downloadPageContent(url);
 
-        HttpURLConnection connection = null;
+        //<title>Lazlo Zalezac: John Carter</title>
+        Element titleElement = source.getFirstElement(HTMLElementName.TITLE);
+        if (titleElement != null) {
+            String titleStr = titleElement.getContent().getTextExtractor().toString();
+            int ndx = titleStr.indexOf(":");
+            ebookData.setAuthor(titleStr.substring(0, ndx).trim());
+            ebookData.setTitle(titleStr.substring(ndx + 1).trim());
+        }
 
-        try {
-
-            URL url = new URL(STORY_URL + storyId);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestProperty("User-Agent", SOLNetworkDAO.CHROME_USER_AGENT);
-
-            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK /*200*/) {
-
-                Source source = new Source(connection.getInputStream());
-                // Call fullSequentialParse manually as most of the source will be parsed.
-                source.fullSequentialParse();
-
-                //<title>Lazlo Zalezac: John Carter</title>
-                Element titleElement = source.getFirstElement(HTMLElementName.TITLE);
-                if (titleElement != null) {
-                    String titleStr = titleElement.getContent().getTextExtractor().toString();
-                    int ndx = titleStr.indexOf(":");
-                    ebookData.setAuthor(titleStr.substring(0, ndx).trim());
-                    ebookData.setTitle(titleStr.substring(ndx + 1).trim());
-                }
-
-                System.out.println("Loading TOC");
-                Element div = source.getElementById("index-list");
+        System.out.println("Loading TOC");
+        Element div = source.getElementById("index-list");
 //                    <div class="ind-e">Part 1: Foo Fighter</div> -- optional
 //                    <span class="link"><a href="/s/43294:27409">Chapter 1</a></span>
 //                    <span class="link"><a href="/s/43294:27410">Chapter 2</a></span>
 //                    <span class="link"><a href="/s/43294:27411">Chapter 3</a></span>
 
-                if (div != null) {
-                    List<Element> elements = div.getChildElements();
-                    String partString = null;
-                    for (Element el : elements) {
+        if (div != null) {
+            List<Element> elements = div.getChildElements();
+            String partString = null;
+            for (Element el : elements) {
 
-                        if ("ind-e".equals(el.getAttributeValue("class"))) {
-                            partString = el.getTextExtractor().toString();
-                        }
-                        if ("link".equals(el.getAttributeValue("class"))) {
-                            String chapterName = el.getChildElements().get(0).getTextExtractor().toString();
-                            if (partString != null) {
-                                chapterName = partString + " - " + chapterName;
-                            }
-                            URL chapterLink = new URL(SOLNetworkDAO.BASE_URL + el.getChildElements().get(0).getAttributeValue("href"));
-                            ebookData.getChapters().add(new ChapterEntry(chapterName, chapterLink));
-                        }
+                if ("ind-e".equals(el.getAttributeValue("class"))) {
+                    partString = el.getTextExtractor().toString();
+                }
+                if ("link".equals(el.getAttributeValue("class"))) {
+                    String chapterName = el.getChildElements().get(0).getTextExtractor().toString();
+                    if (partString != null) {
+                        chapterName = partString + " - " + chapterName;
                     }
-
-                } else {
-                    Log.e("SOL", "No TOC element defined!");
+                    URL chapterLink = new URL(SOLNetworkDAO.BASE_URL + el.getChildElements().get(0).getAttributeValue("href"));
+                    ebookData.getChapters().add(new ChapterEntry(chapterName, chapterLink));
                 }
             }
 
-        } catch (IOException e) {
-            Log.e("SOL", "Error parsing TOC", e);
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
+        } else {
+            Log.e("SOL", "No TOC element defined!");
         }
-
     }
 
-    private void downloadChapters(EbookData ebookData) {
+    private void downloadChapters(EbookData ebookData) throws IOException {
 
         if (!ebookData.getChapters().isEmpty()) {
-            for (ChapterEntry chapter : ebookData.getChapters()) {
-                downloadChapter(chapter);
-            }
-        }
-    }
-
-    private void downloadChapter(ChapterEntry chapterEntry) {
-
-        HttpURLConnection connection = null;
-
-        try {
-
-            connection = (HttpURLConnection) chapterEntry.getChapterURL().openConnection();
-            connection.setRequestProperty("User-Agent", SOLNetworkDAO.CHROME_USER_AGENT);
-
-            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK /*200*/) {
-
-                //reset index in case of subchapters
-                int ndx = 1;
-
-                File chapterFile = File.createTempFile("sol", ".html", cacheDir);
-                chapterEntry.setChapterFile(chapterFile);
-                chapterFile.deleteOnExit();
+            for (ChapterEntry chapterEntry : ebookData.getChapters()) {
 
                 publishProgress("Getting " + chapterEntry.getChapterName());
-                PrintWriter out = new PrintWriter(new FileWriter(chapterFile));
 
-                Source source = new Source(connection.getInputStream());
-                // Call fullSequentialParse manually as most of the source will be parsed.
-                source.fullSequentialParse();
+                Source source = downloadPageContent(chapterEntry.getChapterURL());
 
                 Element title = source.getFirstElement("title");
                 String titleStr = "";
@@ -187,146 +145,173 @@ last edit:and before creating files you must create the folder by calling mkdirs
                         "\t</head>\n" +
                         "\t<body>";
 
-                out.println(header);
+                String footer = "\t</body>\n</html>";
 
-                //<div id="story">
-                Element div = source.getElementById("story");
+                StringBuilder content = new StringBuilder(header);
+                content.append(parseChapter(source, true));
+                content.append(footer);
 
-                //update index
-                ndx++;
-
-                publishProgress(" p" + ndx);
-                writeSegment(out, source, div, ndx);
-
-                out.println("\t</body>\n</html>");
-
-                out.close();
+                chapterEntry.setContent(content.toString());
 
             }
-        } catch (IOException e1) {
-            e1.printStackTrace();
+        }
+    }
+
+    private String parseChapter(Source source, boolean isRecursive) throws IOException {
+
+        //<div id="story">
+        Element div = source.getElementById("story");
+        OutputDocument outputDocument = new OutputDocument(div);
+
+        //remove any intra-story links
+        Element h3End = source.getFirstElement("class", "end", true);
+        if (h3End != null) {
+            outputDocument.remove(h3End);
         }
 
-    }
+        //remove any contacts
+        List<Element> conTags = source.getAllElements("class", "conTag", true);
+        if (conTags != null) {
+            outputDocument.remove(conTags);
+        }
 
-    private void publishProgress(String message) {
-        progressView.append(message + '\n');
-    }
+        //remove any commends
+        Element endNote = source.getFirstElement("class", "end-note", true);
+        if (endNote != null) {
+            outputDocument.remove(endNote);
+        }
 
-    private void writeSubSegment(Element pager, PrintWriter out, int ndx) throws IOException {
+        //remove voting form
+        Element form = source.getElementById("vote-form");
+        if (form != null) {
+            outputDocument.remove(form);
+        }
 
-        AndroidHttpClient httpclient = AndroidHttpClient.newInstance(SOLNetworkDAO.CHROME_USER_AGENT);
-        try {
+        //remove any end comments
+        List<Element> cComments = source.getAllElements("class", "c", true);
+        if (cComments != null) {
+            outputDocument.remove(cComments);
+        }
 
-            List<Element> links = pager.getAllElements(HTMLElementName.A);
-            for (Element link : links) {
-                if (link.getContent().getTextExtractor().toString().trim().equals("Next")) {
+        //create SBs - one for main story, one for any posisble subchapters
+        StringBuilder sbMain = new StringBuilder();
+        StringBuilder sbSubchapters = new StringBuilder();
 
+        //update div id if there are multiple subpages
+        List<Element> pager = source.getAllElements("class", "pager", true);
+        if (pager != null) {
+            outputDocument.remove(pager);
 
-                    HttpGet httpGet = new HttpGet(SOLNetworkDAO.BASE_URL + link.getAttributeValue("href"));
-                    HttpResponse response = httpclient.execute(httpGet, context);
-                    HttpEntity entity = response.getEntity();
+            Attributes divAttributes = div.getAttributes();
+            Map<String, String> attributesMap = new HashMap<String, String>();
+            attributesMap.put("id", "story" + Math.random());
+            outputDocument.replace(divAttributes, attributesMap);
 
-                    if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK /*200*/) {
-                        if (entity != null) {
+            //loop through all pager links elements
+            //if there are subchapters, this function will be called recursively
+            //but only the main call should do the looping so the others will skip
+            //this part
+            if (isRecursive) {
+                //there should only be 1 pager element
+                List<Element> links = pager.get(0).getAllElements(HTMLElementName.A);
+                for (Element link : links) {
+                    //always go to the "next" link
+                    if (link.getContent().getTextExtractor().toString().trim().equals("Next")) {
 
-                            publishProgress("Getting sub chapter " + ndx);
-
-                            Source source = new Source(entity.getContent());
-                            // Call fullSequentialParse manually as most of the source will be parsed.
-                            source.fullSequentialParse();
-
-                            //<div id="story">
-                            Element div = source.getElementById("story");
-                            writeSegment(out, source, div, ndx++);
-
-                        } else {
-                            exception = new RuntimeException("Could not load sub page: " + (ndx - 1));
-                            Log.e("SOL", "Error downloading chapter");
-                        }
+                        publishProgress("Getting sub chapter");
+                        //download the next subchapter and append content
+                        Source innerSource = new Source(downloadPageContent(new URL(SOLNetworkDAO.BASE_URL + link.getAttributeValue("href"))));
+                        //don't recurse
+                        sbSubchapters.append(parseChapter(innerSource, false));
                     }
-
                 }
             }
-
-        } catch (ClientProtocolException e) {
-            exception = e;
-            Log.e("SOL", "Error downloading chapter", e);
-        } catch (IOException e) {
-            exception = e;
-            Log.e("SOL", "Error downloading chapter", e);
-        } finally {
-            // When HttpClient instance is no longer needed,
-            // shut down the connection manager to ensure
-            // immediate deallocation of all system resources
-            httpclient.getConnectionManager().shutdown();
         }
 
+        //create final content
+        sbMain.append(HTMLSanitiser.stripInvalidMarkup(outputDocument.toString()));
+        sbMain.append(sbSubchapters);
+
+        return sbMain.toString();
+
     }
-
-    public String downloadStorySubChapters(String url, int ndx) {
-        publishProgress("Getting sub chapter " + ndx);
-
-        return null;
-    }
-
 
     public Boolean login(HashMap<String, String> params, String loginUrl) {
 
-        return true;
+        HttpURLConnection connection = null;
+        Boolean success = false;
 
-//        HttpURLConnection connection = null;
-//        Boolean success = false;
-//
-//        try {
-//
-//            URL url = new URL(loginUrl);
-//            connection = (HttpURLConnection) url.openConnection();
-//            connection.setRequestProperty("User-Agent", SOLNetworkDAO.CHROME_USER_AGENT);
-//            connection.setRequestMethod("POST");
-//            connection.setDoInput(true);
-//
-//            String postParameters = NetUtils.createQueryStringForParameters(params);
-//
-//            connection.setFixedLengthStreamingMode(
-//                    postParameters.getBytes().length);
-//
-//            connection.connect();
-//            PrintWriter out = new PrintWriter(connection.getOutputStream());
-//            out.print(postParameters);
-//            out.flush();
-//            out.close();
-//
-//            int statusCode = connection.getResponseCode();
-//
-//            if (statusCode == HttpURLConnection.HTTP_MOVED_TEMP) /* 302 is success */{
-//                success = true;
-//            }
-//            InputStream inputStream = connection.getInputStream();
-//            BufferedReader rd = new BufferedReader(new InputStreamReader(inputStream));
-//            StringBuilder sb = new StringBuilder();
-//            String line = "";
-//            while ((line = rd.readLine()) != null) {
-//                sb.append(line);
-//            }
-//            inputStream.close();
-//            Log.d("SOL", "login output: " + sb.toString());
-//
-//
-//        } catch (IOException e) {
-//            Log.e("SOL", "Couldn't log in", e);
-//            success = false;
-//        } finally {
-//            if (connection != null) {
-//                connection.disconnect();
-//            }
-//        }
-//
-//        return success;
+        try {
+
+            URL url = new URL(loginUrl);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestProperty("User-Agent", SOLNetworkDAO.CHROME_USER_AGENT);
+            connection.setRequestMethod("POST");
+            connection.setDoInput(true);
+
+            String postParameters = HttpUtils.createQueryStringForParameters(params);
+
+            connection.setFixedLengthStreamingMode(
+                    postParameters.getBytes().length);
+
+            connection.connect();
+            PrintWriter out = new PrintWriter(connection.getOutputStream());
+            out.print(postParameters);
+            out.flush();
+            out.close();
+
+            int statusCode = connection.getResponseCode();
+
+            if (statusCode == HttpURLConnection.HTTP_MOVED_TEMP) /* 302 is success */ {
+                success = true;
+            }
+            InputStream inputStream = connection.getInputStream();
+            BufferedReader rd = new BufferedReader(new InputStreamReader(inputStream));
+            StringBuilder sb = new StringBuilder();
+            String line = "";
+            while ((line = rd.readLine()) != null) {
+                sb.append(line);
+            }
+            inputStream.close();
+            Log.d("SOL", "login output: " + sb.toString());
+
+        } catch (IOException e) {
+            Log.e("SOL", "Couldn't log in", e);
+            success = false;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+
+        return success;
 
     }
 
-    public void setProgressView(TextView progressView) {
-        this.progressView = progressView;
+    private Source downloadPageContent(URL url) throws IOException {
+
+        HttpURLConnection connection = null;
+        Source source = null;
+        try {
+
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestProperty("User-Agent", SOLNetworkDAO.CHROME_USER_AGENT);
+
+            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK /*200*/) {
+
+                source = new Source(connection.getInputStream());
+                // Call fullSequentialParse manually as most of the source will be parsed.
+                source.fullSequentialParse();
+
+            }
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+
+        return source;
     }
+
+
 }

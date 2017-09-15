@@ -11,37 +11,47 @@ import java.net.URL;
  */
 public class ChapterEntry {
 
-        private String chapterName;
-        private URL chapterURL;
-        private File chapterFile;
+    private String chapterName;
+    private URL chapterURL;
+    private File chapterFile;
+    private String content;
 
-        public ChapterEntry(String chapterName, URL chapterURL) {
-            this.chapterName = chapterName;
-            this.chapterURL = chapterURL;
-        }
+    public ChapterEntry(String chapterName, URL chapterURL) {
+        this.chapterName = chapterName;
+        this.chapterURL = chapterURL;
+    }
 
-        public String getChapterName() {
-            return chapterName;
-        }
+    public String getChapterName() {
+        return chapterName;
+    }
 
-        public void setChapterName(String chapterName) {
-            this.chapterName = chapterName;
-        }
+    public void setChapterName(String chapterName) {
+        this.chapterName = chapterName;
+    }
 
-        public URL getChapterURL() {
-            return chapterURL;
-        }
+    public URL getChapterURL() {
+        return chapterURL;
+    }
 
-        public void setChapterURL(URL chapterURL) {
-            this.chapterURL = chapterURL;
-        }
+    public void setChapterURL(URL chapterURL) {
+        this.chapterURL = chapterURL;
+    }
 
-        public File getChapterFile() {
-            return chapterFile;
-        }
+    public File getChapterFile() {
+        return chapterFile;
+    }
 
-        public void setChapterFile(File chapterFile) {
-            this.chapterFile = chapterFile;
-        }
+    public void setChapterFile(File chapterFile) {
+        this.chapterFile = chapterFile;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
+    }
+
 
 }
