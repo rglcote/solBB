@@ -13,6 +13,7 @@
     <string name="permission_rationale">"Contacts permissions are needed for providing email
         completions."
     </string>
+    <string name="write_permission_rationale">"Write permissions are needed for saving epub files."</string>
     <string name="story_list_name">Story List</string>
     <string name="load_button_string">Select cover image</string>
     <string name="story_id_string">Story ID</string>

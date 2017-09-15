@@ -1,12 +1,18 @@
-package com.rcsoft.solbb.model;
+package com.rcsoft.solbb.utils;
 
+import android.content.Context;
+import android.net.Uri;
+import android.os.Environment;
 import android.util.Log;
+import android.widget.EdgeEffect;
 
 import com.adobe.dp.css.CSSLength;
 import com.adobe.dp.css.CSSNumber;
 import com.adobe.dp.css.SelectorRule;
 import com.adobe.dp.epub.io.FileDataSource;
+import com.adobe.dp.epub.io.InputStreamDataSource;
 import com.adobe.dp.epub.io.OCFContainerWriter;
+import com.adobe.dp.epub.io.StringDataSource;
 import com.adobe.dp.epub.ncx.TOCEntry;
 import com.adobe.dp.epub.opf.NCXResource;
 import com.adobe.dp.epub.opf.OPSResource;
@@ -15,6 +21,8 @@ import com.adobe.dp.epub.opf.StyleResource;
 import com.adobe.dp.epub.ops.OPSDocument;
 import com.adobe.dp.epub.ops.SVGElement;
 import com.adobe.dp.epub.ops.SVGImageElement;
+import com.rcsoft.solbb.model.ChapterEntry;
+import com.rcsoft.solbb.model.EbookData;
 
 import net.htmlparser.jericho.MasonTagTypes;
 import net.htmlparser.jericho.MicrosoftTagTypes;
@@ -29,28 +37,15 @@ import java.util.ArrayList;
  * Created by RDCoteRi on 2017-09-14.
  */
 
-//todo cleancup
-        /*
-getExternalStorage() + "/Android/data/<package_name>/cache/"
-replacing by your app packaged, e.g. com. Orabig.myFirstApp that special folder is automatically deleted from the system if the user uninstall the application, keeping the system free from temporary files.
-edit:Please note that my manifest does not include theyou have to!
-edit: also, if you creating temporary media files (PNG for example) is good practice to create an empty file named .nomedia on that folder. That way you avoid the Media Scanner scanning it and showing it on the gallery.
-last edit:and before creating files you must create the folder by calling mkdirs() on the File object.
-         */
-
 public class EpubBuilder {
 
-    private String author;
-    private String title;
-    private File cacheDir;
-    private String coverImageFilePath;
-    private ArrayList<ChapterEntry> chapters;
+    private EbookData data;
+    private Context context;
 
-    public EpubBuilder(File cacheDir, String coverImageFilePath, ArrayList<ChapterEntry> chapters) {
+    public EpubBuilder(EbookData data, Context context) {
 
-        this.coverImageFilePath = coverImageFilePath;
-        this.cacheDir = cacheDir;
-        this.chapters = chapters;
+        this.data = data;
+        this.context = context;
 
         //boilerplate from jericho parser
         MicrosoftTagTypes.register();
@@ -59,7 +54,21 @@ public class EpubBuilder {
 
     }
 
-    private String writeEpub(ArrayList<ChapterEntry> chapters) {
+    private File getDownloadStorageDir() {
+        return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+    }
+
+    /* Checks if external storage is available for read and write */
+    private File getCacheDir() {
+        String state = Environment.getExternalStorageState();
+        if (Environment.MEDIA_MOUNTED.equals(state)) {
+            return new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/Android/data/com.rcsoft.solbb/cache/");
+        } else {
+            return context.getFilesDir();
+        }
+    }
+
+    public String writeEpub() {
 
         String fileName = "book.raw.epub";
         try {
@@ -67,17 +76,15 @@ public class EpubBuilder {
             Publication epub = new Publication();
 
             // set up title and author
-            epub.addDCMetadata("title", title);
+            epub.addDCMetadata("title", data.getTitle());
             epub.addDCMetadata("publisher", System.getProperty("user.name"));
-            epub.addDCMetadata("creator", author);
+            epub.addDCMetadata("creator", data.getAuthor());
             epub.addDCMetadata("language", "en");
 
             // create a stylesheet
             StyleResource style = epub.createStyleResource("OPS/styles.css");
-            URL stylesheetURL = getClass().getClassLoader().getResource("raw/epub/OEBPS/stylesheet.css");
-            if (stylesheetURL != null) {
-                style.load(new FileDataSource(new File(stylesheetURL.toURI())));
-            }
+
+            style.load(new InputStreamDataSource(context.getAssets().open("epub/OEBPS/stylesheet.css")));
 
             //todo
             //BitmapDrawable img = CoverPageUtils.generateCoverImage(author, title);
@@ -113,20 +120,19 @@ public class EpubBuilder {
             //image.setImageResource(resource);
             svg.add(image);
 
-
             // prepare table of contents
             NCXResource toc = epub.getTOC();
 
-            for (ChapterEntry entry : chapters) {
+            for (ChapterEntry entry : data.getChapters()) {
                 createChapter(epub, toc, style, entry);
             }
 
             // save EPUB to an OCF container
-            if (title != null && author != null) {
-                fileName = author + "-" + title + ".raw.epub";
+            if (data.getTitle() != null && data.getAuthor() != null) {
+                fileName = data.getAuthor() + "-" + data.getTitle() + ".raw.epub";
             }
 
-            File epubFile = new File(cacheDir, fileName);
+            File epubFile = new File(getDownloadStorageDir(), fileName);
             OCFContainerWriter writer = new OCFContainerWriter(new FileOutputStream(epubFile));
             epub.serialize(writer);
             fileName = epubFile.getAbsolutePath();
@@ -143,10 +149,10 @@ public class EpubBuilder {
     private void createChapter(Publication epub, NCXResource toc, StyleResource style, ChapterEntry chapterEntry) throws Exception {
 
         // create first chapter resource
-        OPSResource opsResource = epub.createOPSResource("OPS/" + chapterEntry.getChapterFile().getName());
+        OPSResource opsResource = epub.createOPSResource("OPS/" + chapterEntry.getChapterName());
         epub.addToSpine(opsResource);
 
-        opsResource.load(new FileDataSource(chapterEntry.getChapterFile()));
+        opsResource.load(new StringDataSource(chapterEntry.getContent()));
 
         // get chapter document
         OPSDocument opsDocument = opsResource.getDocument();

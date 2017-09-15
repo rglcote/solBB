@@ -1,11 +1,16 @@
 package com.rcsoft.solbb;
 
+import android.annotation.TargetApi;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.media.ThumbnailUtils;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.util.Log;
@@ -17,23 +22,30 @@ import android.widget.Toast;
 
 import com.rcsoft.solbb.model.EbookData;
 import com.rcsoft.solbb.net.SOLNetworkDAO;
+import com.rcsoft.solbb.utils.EpubBuilder;
 import com.rcsoft.solbb.utils.PublishingAsyncTask;
 
 import java.io.IOException;
 
+import static android.Manifest.permission.READ_CONTACTS;
+import static android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
+
 public class BookBuildActivity extends AppCompatActivity {
 
-    private int PICK_IMAGE_REQUEST = 1;
+    private static final int PICK_IMAGE_REQUEST = 1;
+    private static final int REQUEST_WRITE_STORAGE = 2;
+
     private EditText mStoryIdView;
     private Uri selectedImageURI = null;
     private RetrieveSOLContentTask mBookBuildTask = null;
+    private Context mContext;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_book_build);
-
         mStoryIdView = (EditText) findViewById(R.id.story_id_text);
+        mContext = getApplicationContext();
     }
 
     public void buildEpub(View v) {
@@ -109,7 +121,14 @@ public class BookBuildActivity extends AppCompatActivity {
                 //start process
                 SOLNetworkDAO.getInstance().setCaller(this);
                 EbookData data = SOLNetworkDAO.getInstance().buildEbookFromStoryId(storyId, selectedImageURI);
-                return true;
+                if (mayWriteToDownload()) {
+                    EpubBuilder builder = new EpubBuilder(data, mContext);
+                    String epubFile = builder.writeEpub();
+                    Log.d("SOL", "File created: " + epubFile);
+                    return true;
+                } else {
+                    return false;
+                }
             } catch (Exception e) {
                 this.exception = e;
                 return false;
@@ -130,6 +149,28 @@ public class BookBuildActivity extends AppCompatActivity {
             }
 
         }
+    }
+
+    private boolean mayWriteToDownload() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                return true;
+            }
+
+            if (shouldShowRequestPermissionRationale(WRITE_EXTERNAL_STORAGE)) {
+                Snackbar.make(mStoryIdView, R.string.write_permission_rationale, Snackbar.LENGTH_INDEFINITE)
+                        .setAction(android.R.string.ok, new View.OnClickListener() {
+                            @Override
+                            @TargetApi(Build.VERSION_CODES.M)
+                            public void onClick(View v) {
+                                requestPermissions(new String[]{WRITE_EXTERNAL_STORAGE}, REQUEST_WRITE_STORAGE);
+                            }
+                        });
+            } else {
+                requestPermissions(new String[]{WRITE_EXTERNAL_STORAGE}, REQUEST_WRITE_STORAGE);
+            }
+        }
+        return false;
     }
 
 
