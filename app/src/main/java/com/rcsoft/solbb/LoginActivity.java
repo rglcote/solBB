@@ -182,7 +182,7 @@ public class LoginActivity extends AppCompatActivity implements LoaderCallbacks<
             // perform the user login attempt.
             showProgress(true);
             mAuthTask = new UserLoginTask(email, password);
-            mAuthTask.execute("https://storiesonline.net/sol-secure/login.php");
+            mAuthTask.execute();
         }
     }
 
@@ -290,7 +290,7 @@ public class LoginActivity extends AppCompatActivity implements LoaderCallbacks<
      * Represents an asynchronous login/registration task used to authenticate
      * the user.
      */
-    private class UserLoginTask extends AsyncTask<String, Void, Boolean> {
+    private class UserLoginTask extends AsyncTask<Void, Void, Boolean> {
 
         private HashMap<String, String> params = new HashMap<>();
 
@@ -300,9 +300,9 @@ public class LoginActivity extends AppCompatActivity implements LoaderCallbacks<
         }
 
         @Override
-        protected Boolean doInBackground(String... urls) {
+        protected Boolean doInBackground(Void... voids) {
 
-            return SOLNetworkDAO.getInstance().login(params, urls[0]);
+            return SOLNetworkDAO.getInstance().login(params);
 
         }
 

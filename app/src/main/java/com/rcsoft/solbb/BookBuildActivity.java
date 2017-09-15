@@ -13,9 +13,11 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.rcsoft.solbb.model.EbookData;
 import com.rcsoft.solbb.net.SOLNetworkDAO;
+import com.rcsoft.solbb.utils.PublishingAsyncTask;
 
 import java.io.IOException;
 
@@ -24,6 +26,7 @@ public class BookBuildActivity extends AppCompatActivity {
     private int PICK_IMAGE_REQUEST = 1;
     private EditText mStoryIdView;
     private Uri selectedImageURI = null;
+    private RetrieveSOLContentTask mBookBuildTask = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,15 +41,15 @@ public class BookBuildActivity extends AppCompatActivity {
         // Check for a valid storyId, if the user entered one.
         String storyId = mStoryIdView.getText().toString();
         if (!TextUtils.isEmpty(storyId)) {
-            //show error and stop
-            mStoryIdView.setError(getString(R.string.error_invalid_password));
-            mStoryIdView.requestFocus();
+            mBookBuildTask = new RetrieveSOLContentTask(storyId);
+            mBookBuildTask.execute();
         } else {
-            //start process
-            SOLNetworkDAO.getInstance().setProgressView((TextView) findViewById(R.id.progress_text_view));
-            EbookData data = SOLNetworkDAO.getInstance().buildEbookFromStoryId(mStoryIdView.getText().toString(), selectedImageURI);
+            //show error and stop
+            mStoryIdView.setError(getString(R.string.story_id_requested));
+            mStoryIdView.requestFocus();
         }
     }
+
 
     public void selectImage(View v) {
         Intent intent = new Intent();
@@ -74,5 +77,60 @@ public class BookBuildActivity extends AppCompatActivity {
             Log.e("SOL", "Error loading thumbnail", e);
         }
     }
+
+    public void finish(){
+        Toast.makeText(this, "Book creation successful", Toast.LENGTH_SHORT).show();
+//        //successful - go to next screen
+//        Intent intent = new Intent(this, BookBuildActivity.class);
+//        startActivity(intent);
+    }
+
+    private class RetrieveSOLContentTask extends PublishingAsyncTask<Void, String, Boolean> {
+
+        private Exception exception;
+        private String storyId;
+        TextView mProgressView = (TextView) findViewById(R.id.progress_text_view);
+
+
+        public RetrieveSOLContentTask (String storyId) {
+            this.storyId = storyId;
+        }
+
+        @Override
+        protected void onProgressUpdate(String... values) {
+            super.onProgressUpdate(values);
+            for (String val : values) {
+                mProgressView.append(val);
+            }
+        }
+
+        protected Boolean doInBackground(Void... voids) {
+            try {
+                //start process
+                SOLNetworkDAO.getInstance().setCaller(this);
+                EbookData data = SOLNetworkDAO.getInstance().buildEbookFromStoryId(storyId, selectedImageURI);
+                return true;
+            } catch (Exception e) {
+                this.exception = e;
+                return false;
+            }
+        }
+
+        protected void onPostExecute(Boolean success) {
+            // TODO: check this.exception
+            // TODO: do something with the feed
+
+            mBookBuildTask = null;
+
+            if (success) {
+                finish();
+            } else {
+                mStoryIdView.setError(getString(R.string.error_bookcreation_failed));
+                mStoryIdView.requestFocus();
+            }
+
+        }
+    }
+
 
 }

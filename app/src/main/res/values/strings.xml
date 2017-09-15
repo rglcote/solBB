@@ -19,5 +19,7 @@
     <string name="saveCreds">Save Credentials</string>
     <string name="tiger_eye_logo_description">Tiger Eye Logo</string>
     <string name="prompt_story_id">Enter story ID</string>
+    <string name="story_id_requested">Please enter a story ID</string>
+    <string name="error_bookcreation_failed">There was an error creating your ebook</string>
 
 </resources>

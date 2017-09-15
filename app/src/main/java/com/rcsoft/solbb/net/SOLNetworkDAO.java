@@ -2,8 +2,8 @@ package com.rcsoft.solbb.net;
 
 import android.net.Uri;
 import android.util.Log;
-import android.widget.TextView;
 
+import com.rcsoft.solbb.utils.PublishingAsyncTask;
 import com.rcsoft.solbb.model.ChapterEntry;
 import com.rcsoft.solbb.model.EbookData;
 import com.rcsoft.solbb.utils.HTMLSanitiser;
@@ -37,14 +37,16 @@ import java.util.Map;
 public class SOLNetworkDAO {
 
     //net parameters
-    public static final String BASE_URL = "https://www.storiesonline.net";
-    public static final String STORY_URL = BASE_URL + "/s/";
+    public static final String HTTP_BASE_URL = "http://storiesonline.net";
+    public static final String HTTPS_BASE_URL = "https://storiesonline.net";
+    public static final String STORY_URL = HTTP_BASE_URL + "/s/";
+    public static final String LOGIN_URL = HTTPS_BASE_URL + "/sol-secure/login.php";
     public static final String CHROME_USER_AGENT = "Mozilla/5.0 (Windows NT 6.2; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1667.0 Safari/537.36";
 
     //singleton
     private static SOLNetworkDAO instance = new SOLNetworkDAO();
     private CookieManager cookieManager;
-    private TextView progressView;
+    private PublishingAsyncTask caller;
 
     private SOLNetworkDAO() {
         cookieManager = new CookieManager();
@@ -55,12 +57,13 @@ public class SOLNetworkDAO {
         return instance;
     }
 
-    public void setProgressView(TextView progressView) {
-        this.progressView = progressView;
+    public void setCaller(PublishingAsyncTask caller) {
+        this.caller = caller;
     }
 
     private void publishProgress(String message) {
-        progressView.append(message + '\n');
+        Log.d("SOL", message);
+        //caller.doProgress(message + '\n');
     }
 
     public EbookData buildEbookFromStoryId(String storyId, Uri coverImage) {
@@ -72,7 +75,8 @@ public class SOLNetworkDAO {
             publishProgress("TOC parsed");
             downloadChapters(ebookData);
             return ebookData;
-        } catch (IOException e) {
+        } catch (Exception e) {
+            Log.e("SOL", "Error downloading SOL data", e);
             throw new RuntimeException("Error downloading SOL data", e);
         }
 
@@ -82,6 +86,9 @@ public class SOLNetworkDAO {
 
         URL url = new URL(STORY_URL + storyId);
         Source source = downloadPageContent(url);
+        if (source == null) {
+            throw new RuntimeException("Invalid URL: " + url.toString());
+        }
 
         //<title>Lazlo Zalezac: John Carter</title>
         Element titleElement = source.getFirstElement(HTMLElementName.TITLE);
@@ -112,7 +119,7 @@ public class SOLNetworkDAO {
                     if (partString != null) {
                         chapterName = partString + " - " + chapterName;
                     }
-                    URL chapterLink = new URL(SOLNetworkDAO.BASE_URL + el.getChildElements().get(0).getAttributeValue("href"));
+                    URL chapterLink = new URL(HTTP_BASE_URL + el.getChildElements().get(0).getAttributeValue("href"));
                     ebookData.getChapters().add(new ChapterEntry(chapterName, chapterLink));
                 }
             }
@@ -130,6 +137,9 @@ public class SOLNetworkDAO {
                 publishProgress("Getting " + chapterEntry.getChapterName());
 
                 Source source = downloadPageContent(chapterEntry.getChapterURL());
+                if (source == null) {
+                    throw new RuntimeException("Invalid URL: " + chapterEntry.getChapterURL().toString());
+                }
 
                 Element title = source.getFirstElement("title");
                 String titleStr = "";
@@ -211,7 +221,7 @@ public class SOLNetworkDAO {
             //if there are subchapters, this function will be called recursively
             //but only the main call should do the looping so the others will skip
             //this part
-            if (isRecursive) {
+            if (isRecursive && !pager.isEmpty()) {
                 //there should only be 1 pager element
                 List<Element> links = pager.get(0).getAllElements(HTMLElementName.A);
                 for (Element link : links) {
@@ -220,7 +230,11 @@ public class SOLNetworkDAO {
 
                         publishProgress("Getting sub chapter");
                         //download the next subchapter and append content
-                        Source innerSource = new Source(downloadPageContent(new URL(SOLNetworkDAO.BASE_URL + link.getAttributeValue("href"))));
+                        URL innerURL = new URL(HTTP_BASE_URL + link.getAttributeValue("href"));
+                        Source innerSource = downloadPageContent(innerURL);
+                        if (innerSource == null) {
+                            throw new RuntimeException("Invalid URL: " + innerURL.toString());
+                        }
                         //don't recurse
                         sbSubchapters.append(parseChapter(innerSource, false));
                     }
@@ -236,16 +250,16 @@ public class SOLNetworkDAO {
 
     }
 
-    public Boolean login(HashMap<String, String> params, String loginUrl) {
+    public Boolean login(HashMap<String, String> params) {
 
         HttpURLConnection connection = null;
         Boolean success = false;
 
         try {
 
-            URL url = new URL(loginUrl);
+            URL url = new URL(LOGIN_URL);
             connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestProperty("User-Agent", SOLNetworkDAO.CHROME_USER_AGENT);
+            connection.setRequestProperty("User-Agent", CHROME_USER_AGENT);
             connection.setRequestMethod("POST");
             connection.setDoInput(true);
 
@@ -295,9 +309,12 @@ public class SOLNetworkDAO {
         try {
 
             connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestProperty("User-Agent", SOLNetworkDAO.CHROME_USER_AGENT);
+            connection.setRequestProperty("User-Agent", CHROME_USER_AGENT);
 
-            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK /*200*/) {
+            int statusCode = connection.getResponseCode();
+            Log.d("SOL", "Status code: " + statusCode);
+
+            if (statusCode == HttpURLConnection.HTTP_OK /*200*/) {
 
                 source = new Source(connection.getInputStream());
                 // Call fullSequentialParse manually as most of the source will be parsed.
@@ -312,6 +329,5 @@ public class SOLNetworkDAO {
 
         return source;
     }
-
 
 }
