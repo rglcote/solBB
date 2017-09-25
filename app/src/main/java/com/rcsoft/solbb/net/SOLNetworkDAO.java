@@ -3,11 +3,11 @@ package com.rcsoft.solbb.net;
 import android.net.Uri;
 import android.util.Log;
 
-import com.rcsoft.solbb.utils.PublishingAsyncTask;
 import com.rcsoft.solbb.model.ChapterEntry;
 import com.rcsoft.solbb.model.EbookData;
 import com.rcsoft.solbb.utils.HTMLSanitiser;
 import com.rcsoft.solbb.utils.HttpUtils;
+import com.rcsoft.solbb.utils.PublishingAsyncTask;
 
 import net.htmlparser.jericho.Attributes;
 import net.htmlparser.jericho.Element;
@@ -82,7 +82,7 @@ public class SOLNetworkDAO {
 
     }
 
-    public void parseStoryTOC(String storyId, EbookData ebookData) throws IOException {
+    private void parseStoryTOC(String storyId, EbookData ebookData) throws IOException {
 
         URL url = new URL(STORY_URL + storyId);
         Source source = downloadPageContent(url);
@@ -169,32 +169,29 @@ public class SOLNetworkDAO {
 
     private String parseChapter(Source source, boolean isRecursive) throws IOException {
 
-        //<div id="story">
-        Element div = source.getElementById("story");
-        OutputDocument outputDocument = new OutputDocument(div);
-
-        //remove any intra-story links
-        Element h3End = source.getFirstElement("class", "end", true);
-        if (h3End != null) {
-            outputDocument.remove(h3End);
+        //<article>
+        Element story = source.getFirstElement("article");
+        if (story == null) {
+            throw new RuntimeException("Could not find main story element");
         }
+        OutputDocument outputDocument = new OutputDocument(story);
 
-        //remove any contacts
-        List<Element> conTags = source.getAllElements("class", "conTag", true);
-        if (conTags != null) {
-            outputDocument.remove(conTags);
-        }
-
-        //remove any commends
-        Element endNote = source.getFirstElement("class", "end-note", true);
-        if (endNote != null) {
-            outputDocument.remove(endNote);
+        //remove any notes
+        List<Element> endNotes = source.getAllElements("class", "end-note", true);
+        if (endNotes != null) {
+            outputDocument.remove(endNotes);
         }
 
         //remove voting form
         Element form = source.getElementById("vote-form");
         if (form != null) {
             outputDocument.remove(form);
+        }
+
+        //remove any intra-story links
+        List<Element> hEnds = source.getAllElements("class", "end", true);
+        if (hEnds != null) {
+            outputDocument.remove(hEnds);
         }
 
         //remove any end comments
@@ -212,8 +209,8 @@ public class SOLNetworkDAO {
         if (pager != null) {
             outputDocument.remove(pager);
 
-            Attributes divAttributes = div.getAttributes();
-            Map<String, String> attributesMap = new HashMap<String, String>();
+            Attributes divAttributes = story.getAttributes();
+            Map<String, String> attributesMap = new HashMap<>();
             attributesMap.put("id", "story" + Math.random());
             outputDocument.replace(divAttributes, attributesMap);
 
@@ -282,7 +279,7 @@ public class SOLNetworkDAO {
             InputStream inputStream = connection.getInputStream();
             BufferedReader rd = new BufferedReader(new InputStreamReader(inputStream));
             StringBuilder sb = new StringBuilder();
-            String line = "";
+            String line;
             while ((line = rd.readLine()) != null) {
                 sb.append(line);
             }
