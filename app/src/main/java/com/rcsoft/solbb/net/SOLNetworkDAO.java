@@ -3,11 +3,11 @@ package com.rcsoft.solbb.net;
 import android.net.Uri;
 import android.util.Log;
 
+import com.rcsoft.solbb.BookBuildActivity;
 import com.rcsoft.solbb.model.ChapterEntry;
 import com.rcsoft.solbb.model.EbookData;
 import com.rcsoft.solbb.utils.HTMLSanitiser;
 import com.rcsoft.solbb.utils.HttpUtils;
-import com.rcsoft.solbb.utils.PublishingAsyncTask;
 
 import net.htmlparser.jericho.Attributes;
 import net.htmlparser.jericho.Element;
@@ -46,7 +46,7 @@ public class SOLNetworkDAO {
     //singleton
     private static SOLNetworkDAO instance = new SOLNetworkDAO();
     private CookieManager cookieManager;
-    private PublishingAsyncTask caller;
+    private BookBuildActivity.RetrieveSOLContentTask caller;
 
     private SOLNetworkDAO() {
         cookieManager = new CookieManager();
@@ -57,13 +57,13 @@ public class SOLNetworkDAO {
         return instance;
     }
 
-    public void setCaller(PublishingAsyncTask caller) {
+    public void setCaller(BookBuildActivity.RetrieveSOLContentTask caller) {
         this.caller = caller;
     }
 
     private void publishProgress(String message) {
         Log.d("SOL", message);
-        //caller.doProgress(message + '\n');
+        caller.doProgress(message + '\n');
     }
 
     public EbookData buildEbookFromStoryId(String storyId, Uri coverImage) {
@@ -175,6 +175,28 @@ public class SOLNetworkDAO {
             throw new RuntimeException("Could not find main story element");
         }
         OutputDocument outputDocument = new OutputDocument(story);
+
+        //if we're dealing with calls because of a pager - isRecursive == false
+        //need to strip the title in a <h2> block
+        if (!isRecursive) {
+
+            //<h2>Chapter 5: Emerging</h2>
+            //<div class="date">Posted: September 23, 2017 - 09:53:01 pm</div>
+            Element h2Title = source.getFirstElement("h2");
+            if (h2Title != null) {
+                outputDocument.remove(h2Title);
+            }
+            Element dateDiv = source.getFirstElement("class", "date", true);
+            if (dateDiv != null) {
+                outputDocument.remove(dateDiv);
+            }
+        }
+
+        //remove any continues/continued spans
+        List<Element> contTags = source.getAllElements("class", "conTag", true);
+        if (contTags != null) {
+            outputDocument.remove(contTags);
+        }
 
         //remove any notes
         List<Element> endNotes = source.getAllElements("class", "end-note", true);

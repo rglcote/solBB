@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.media.ThumbnailUtils;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
@@ -23,11 +24,9 @@ import android.widget.Toast;
 import com.rcsoft.solbb.model.EbookData;
 import com.rcsoft.solbb.net.SOLNetworkDAO;
 import com.rcsoft.solbb.utils.EpubBuilder;
-import com.rcsoft.solbb.utils.PublishingAsyncTask;
 
 import java.io.IOException;
 
-import static android.Manifest.permission.READ_CONTACTS;
 import static android.Manifest.permission.WRITE_EXTERNAL_STORAGE;
 
 public class BookBuildActivity extends AppCompatActivity {
@@ -46,9 +45,16 @@ public class BookBuildActivity extends AppCompatActivity {
         setContentView(R.layout.activity_book_build);
         mStoryIdView = (EditText) findViewById(R.id.story_id_text);
         mContext = getApplicationContext();
+        //check permission
+        mayWriteToDownload();
     }
 
     public void buildEpub(View v) {
+
+        //clear any previous error messages
+        if (mStoryIdView.getError() != null) {
+            mStoryIdView.setError(null);
+        }
 
         // Check for a valid storyId, if the user entered one.
         String storyId = mStoryIdView.getText().toString();
@@ -90,29 +96,55 @@ public class BookBuildActivity extends AppCompatActivity {
         }
     }
 
-    public void finish(){
-        Toast.makeText(this, "Book creation successful", Toast.LENGTH_SHORT).show();
+    public void finish() {
+        //Toast.makeText(this, "Book creation successful", Toast.LENGTH_SHORT).show();
+        Snackbar snackbar = Snackbar.make(findViewById(R.id.progress_text_view), "Book creation successful:\nFOOBAR", Snackbar.LENGTH_LONG);
+        snackbar.show();
+
 //        //successful - go to next screen
 //        Intent intent = new Intent(this, BookBuildActivity.class);
 //        startActivity(intent);
     }
 
-    private class RetrieveSOLContentTask extends PublishingAsyncTask<Void, String, Boolean> {
+    public class RetrieveSOLContentTask extends AsyncTask<Void, String, Boolean> {
 
         private Exception exception;
         private String storyId;
-        TextView mProgressView = (TextView) findViewById(R.id.progress_text_view);
+        TextView mProgressView = null;
+        boolean isProgressEnabled = true;
+        boolean isFirstMessage = true;
 
-
-        public RetrieveSOLContentTask (String storyId) {
+        public RetrieveSOLContentTask(String storyId) {
             this.storyId = storyId;
+        }
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            mProgressView = (TextView) findViewById(R.id.progress_text_view);
+            if (mProgressView == null) {
+                Log.e("SOL", "Could not load progress view, disabling!");
+                isProgressEnabled = false;
+            }
+        }
+
+        //allow progress to be set from external DAO
+        public void doProgress(String... values) {
+            publishProgress(values);
         }
 
         @Override
         protected void onProgressUpdate(String... values) {
             super.onProgressUpdate(values);
-            for (String val : values) {
-                mProgressView.append(val);
+            if (isProgressEnabled) {
+                //remove waiting message
+                if (isFirstMessage){
+                    mProgressView.setText(null);
+                    isFirstMessage = false;
+                }
+                for (String val : values) {
+                    mProgressView.append(val);
+                }
             }
         }
 
